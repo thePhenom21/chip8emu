@@ -1,25 +1,41 @@
+use std::ops::Deref;
 
 #[derive(Clone)]
 pub struct CPU {
-    pub registers: Vec<u8>,
+    pub registers: [u8;16],
     pub address_reg: u16,
     pub program_counter: u8
 }
 
-impl CPU{}
-
 
 #[derive(Clone)]
 pub struct Memory{
-    pub buf : Vec<u8>
+    pub buf : [u8;4096]
 }
-
-impl Memory{}
-
 
 #[derive(Clone)]
 pub struct Stack{
-    pub buf : Vec<u8>
+    pub buf : [u8;48]
 }
 
-impl Stack{}
+impl Deref for CPU{
+    type Target = CPU;
+
+    fn deref(&self) -> &Self::Target {
+        &self
+    }
+}
+impl Deref for Memory{
+    type Target = Memory;
+
+    fn deref(&self) -> &Self::Target {
+        &self
+    }
+}
+impl Deref for Stack{
+    type Target = Stack;
+
+    fn deref(&self) -> &Self::Target {
+        &self
+    }
+}

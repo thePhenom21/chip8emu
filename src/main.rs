@@ -7,9 +7,12 @@ use std::{
     io::{Bytes, Read},
     u8,
 };
+use std::slice::Windows;
+
+use wgpu::Instance;
 
 fn main() {
-    let mut f = File::open("test_opcode.ch8").unwrap();
+    let mut f = File::open("ibm.ch8").unwrap();
 
     let mut s = Vec::new();
 
@@ -17,22 +20,25 @@ fn main() {
 
     let len : &usize = &s.len();
 
+    let disp = Instance::new(Default::default());
+    unsafe { disp.create_surface(); }
+
     let mut cpu = CPU{
-        registers : Vec::with_capacity(16),
+        registers : [0;16],
         address_reg: 0,
         program_counter: 0,
     };
 
     let mut memory = Memory{
-        buf : Vec::with_capacity(4096)
+        buf : [0;4096]
     };
 
     let mut stack = Stack{
-        buf : Vec::with_capacity(48)
+        buf : [0;48]
     };
 
     while &cpu.program_counter < &(*len as u8) {
-        let re = dis(&s, cpu.clone(), memory.clone() , stack.clone());
+        let re = dis(&s, cpu, memory , stack);
         cpu = re.0;
         memory = re.1;
         stack = re.2;
@@ -48,8 +54,19 @@ fn dis(bytes: &Vec<u8>, mut cpu: CPU, mut memory : Memory, mut stack : Stack) ->
     let third_part : u8 = bytes.get(index).unwrap() >> 4;
     let fourth_part : u8 = (bytes.get(index).unwrap() << 4) >> 4;
 
-    let n2 = concat!(third_part.to_string(),fourth_part.to_string()).parse::<u8>().unwrap();
-    let n3 = concat!(second_part.to_string(),third_part.to_string(),fourth_part.to_string()).parse::<u16>().unwrap();
+    let mut second_part_s = second_part.to_string();
+    let mut third_part_s = third_part.to_string();
+    let fourth_part_s = fourth_part.to_string();
+    let mut third_part2_s = third_part.to_string();
+
+    third_part_s.push_str(fourth_part_s.as_str());
+
+    second_part_s.push_str(third_part2_s.as_str());
+    second_part_s.push_str(fourth_part_s.as_str());
+
+    let n2 = &third_part_s.parse::<u8>().unwrap();
+    let n3 = &second_part_s.parse::<u16>().unwrap();
+
 
 
     match first_part {
@@ -67,27 +84,27 @@ fn dis(bytes: &Vec<u8>, mut cpu: CPU, mut memory : Memory, mut stack : Stack) ->
         0x04 => (),
         0x05 => (),
         0x06 => {
-                cpu.registers[second_part] = n2;
+                cpu.registers[second_part as usize] = *n2;
         },
         0x07 => {
-                cpu.registers[second_part] += n2;
+                cpu.registers[second_part as usize] += n2;
         },
         0x08 => (),
         0x09 => (),
         0x0a => {
-                cpu.address_reg = n3;
+                cpu.address_reg = *n3;
         },
         0x0b => (),
         0x0c => (),
         0x0d => {
-            draw(cpu.registers[second_part],cpu.registers[third_part],fourth_part);
+            draw(cpu.registers[second_part as usize],cpu.registers[third_part as usize],fourth_part);
         },
         0x0e => (),
         0x0f => (),
         _ => println!("error"),
     }
 
-    return (*cpu,*memory, *stack);
+    return (cpu,memory, stack);
 }
 
 fn clear_display(){
