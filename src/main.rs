@@ -1,32 +1,159 @@
 mod components;
-use components::{Memory,CPU,Stack};
+mod display;
+
+use components::{Memory,CPU,Stack,Computer};
+use display::Display;
 
 use std::{
     fmt::LowerHex,
     fs::File,
-    io::{Bytes, Read},
+    io::{Read},
     u8,
 };
-use std::slice::Windows;
 
-use wgpu::Instance;
+
+impl Computer{
+
+    fn next_operation(&mut self){
+        self.cpu.program_counter += 2;
+    }
+    fn executor(&mut self){
+        let index = self.cpu.program_counter as usize;
+
+        let first_part : u8 = self.memory.buf[index + 1]  >> 4;
+        let second_part : u8  = (self.memory.buf[index + 1] << 4) >> 4;
+        let third_part : u8 = self.memory.buf[index] >> 4;
+        let fourth_part : u8 = (self.memory.buf[index] << 4) >> 4;
+
+
+        let n2 = ((0 | third_part) << 4) | fourth_part;
+        let n3 =  (0 | second_part as u16) << 8 | (0 | third_part as u16) << 4 | fourth_part as u16;
+
+        let instruction = (0 | first_part as u16) << 12 | (0 | second_part as u16) << 8 | (0 | third_part as u16) << 4 | (0 | fourth_part as u16);
+
+        match first_part {
+            0 => {
+                if instruction == 0x00E0 {
+                    self.display.clear_display();
+                }
+                if instruction == 0x00EE {
+                    self.cpu.program_counter = self.stack.buf.pop().unwrap() - 2;
+                }
+            },
+
+            1 =>{
+                self.cpu.program_counter = n3 - 2;
+            },
+
+            2 => {
+                self.stack.buf.push(self.cpu.program_counter);
+                self.cpu.program_counter = n3 - 2;
+            },
+            3 => {
+                if (self.cpu.registers[second_part as usize] == n2){
+                    self.cpu.program_counter += 2;
+                }
+            },
+            4 => {
+                if (self.cpu.registers[second_part as usize] != n2){
+                    self.cpu.program_counter += 2;
+                }
+            },
+            5 => {
+                if(self.cpu.registers[second_part as usize] == self.cpu.registers[third_part as usize]){
+                    self.cpu.program_counter += 2;
+                }
+            },
+            6 => {
+                self.cpu.registers[second_part as usize] = n2;
+            },
+            7 => {
+                self.cpu.registers[second_part as usize] += n2;
+            },
+            8 => {
+                match fourth_part {
+                    0 => {
+                        self.cpu.registers[second_part as usize] = self.cpu.registers[third_part as usize];
+                    },
+                    1 => {
+                        self.cpu.registers[second_part as usize] |= self.cpu.registers[third_part as usize];
+                    }
+                    2 => {
+                        self.cpu.registers[second_part as usize] &= self.cpu.registers[third_part as usize];
+                    },
+                    3 => {
+                        self.cpu.registers[second_part as usize] ^= self.cpu.registers[third_part as usize];
+                    }
+                    4 => {
+                        self.cpu.registers[second_part as usize] += self.cpu.registers[third_part as usize];
+                    }
+                    5 => {
+                        self.cpu.registers[second_part as usize] -= self.cpu.registers[third_part as usize];
+                    },
+                    6 => {
+                        let least_bit = (self.cpu.registers[second_part as usize] << 7) >> 7;
+                        self.cpu.registers[15] = least_bit;
+                        self.cpu.registers[second_part as usize] >>= 1;
+                    }
+                    7 => {
+                        self.cpu.registers[second_part as usize] = self.cpu.registers[third_part as usize] - self.cpu.registers[second_part as usize];
+                    }
+                    8 => {
+                        let most_bit = (self.cpu.registers[second_part as usize] >> 7) ;
+                        self.cpu.registers[15] = most_bit;
+                        self.cpu.registers[second_part as usize] >>= 1;
+                    }
+                    _ => {}
+                }
+            },
+            9 => {
+                if (self.cpu.registers[second_part as usize] != self.cpu.registers[third_part as usize]){
+                    self.cpu.program_counter += 2;
+                }
+            },
+            10 => {
+                self.cpu.address_reg = n3;
+            },
+            11 => {
+                self.cpu.program_counter = self.cpu.registers[0] as u16 + n3 - 2;
+            },
+            12 => (),
+            13 => {
+
+                let p = fourth_part as usize;
+                let mut buf: [u8;8] = [0;8];
+                for k  in buf{
+                    let a = k as usize;
+                    buf[a] = self.memory.buf[(self.cpu.address_reg+a as u16) as usize];
+                }
+
+                    self.display.draw(self.cpu.registers[second_part as usize],self.cpu.registers[third_part as usize],fourth_part,buf);
+
+
+            },
+            14 => (),
+            15 => (),
+            _ => println!("error"),
+        }
+    }
+}
+
+
 
 fn main() {
-    let mut f = File::open("ibm.ch8").unwrap();
+    let mut f = File::open("test_opcode.ch8").unwrap();
 
     let mut s = Vec::new();
 
     _ = f.read_to_end(&mut s).unwrap();
 
-    let len : &usize = &s.len();
+    let len: &usize = &s.len();
 
-    let disp = Instance::new(Default::default());
-    unsafe { disp.create_surface(); }
 
     let mut cpu = CPU{
         registers : [0;16],
         address_reg: 0,
-        program_counter: 0,
+        program_counter:0,
     };
 
     let mut memory = Memory{
@@ -34,83 +161,36 @@ fn main() {
     };
 
     let mut stack = Stack{
-        buf : [0;48]
+        buf : Vec::new()
     };
 
-    while &cpu.program_counter < &(*len as u8) {
-        let re = dis(&s, cpu, memory , stack);
-        cpu = re.0;
-        memory = re.1;
-        stack = re.2;
-        cpu.program_counter += 2;
+    let mut display = Display::default();
+
+
+
+    let mut computer =  Computer{
+        cpu,
+        memory,
+        stack,
+        display
+    };
+
+    let mut i : usize = 0;
+    while i < *len {
+        computer.memory.buf[i] = *s.get(i).unwrap();
+        i+=1;
     }
-}
 
-fn dis(bytes: &Vec<u8>, mut cpu: CPU, mut memory : Memory, mut stack : Stack) -> (CPU, Memory, Stack){
-    let index = cpu.program_counter as usize;
-
-    let first_part : u8 = bytes.get(index + 1).unwrap() >> 4;
-    let second_part : u8  = (bytes.get(index + 1).unwrap() << 4) >> 4;
-    let third_part : u8 = bytes.get(index).unwrap() >> 4;
-    let fourth_part : u8 = (bytes.get(index).unwrap() << 4) >> 4;
-
-    let mut second_part_s = second_part.to_string();
-    let mut third_part_s = third_part.to_string();
-    let fourth_part_s = fourth_part.to_string();
-    let mut third_part2_s = third_part.to_string();
-
-    third_part_s.push_str(fourth_part_s.as_str());
-
-    second_part_s.push_str(third_part2_s.as_str());
-    second_part_s.push_str(fourth_part_s.as_str());
-
-    let n2 = &third_part_s.parse::<u8>().unwrap();
-    let n3 = &second_part_s.parse::<u16>().unwrap();
-
-
-
-    match first_part {
-        0x00 => if third_part == 0x0E {
-                clear_display();
-        },
-
-        0x01 =>{
-                cpu.program_counter = (n3 - 2) as u8;
+    loop {
+        while &computer.cpu.program_counter <= &((4096u16) - 2) {
+            computer.executor();
+            computer.next_operation();
         }
-
-
-        0x02 => (),
-        0x03 => (),
-        0x04 => (),
-        0x05 => (),
-        0x06 => {
-                cpu.registers[second_part as usize] = *n2;
-        },
-        0x07 => {
-                cpu.registers[second_part as usize] += n2;
-        },
-        0x08 => (),
-        0x09 => (),
-        0x0a => {
-                cpu.address_reg = *n3;
-        },
-        0x0b => (),
-        0x0c => (),
-        0x0d => {
-            draw(cpu.registers[second_part as usize],cpu.registers[third_part as usize],fourth_part);
-        },
-        0x0e => (),
-        0x0f => (),
-        _ => println!("error"),
     }
 
-    return (cpu,memory, stack);
-}
 
-fn clear_display(){
 
 }
 
-fn draw(x : u8, y : u8, n : u8){
 
-}
+
