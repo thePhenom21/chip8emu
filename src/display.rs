@@ -11,6 +11,8 @@ pub struct Display{
 }
 impl Display{
 
+
+
     pub fn init_display() -> WindowCanvas{
         let sdl_context = sdl2::init().unwrap();
         let video_subsystem = sdl_context.video().unwrap();
@@ -24,7 +26,7 @@ impl Display{
         canvas.set_draw_color(Color::BLACK);
         canvas.clear();
         canvas.present();
-        std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+        std::thread::sleep(Duration::new(1, 1_000_000_000u32 / 60));
 
         return canvas;
     }
@@ -39,24 +41,24 @@ impl Display{
             self.canvas.set_draw_color(Color::BLACK);
             self.canvas.clear();
             self.canvas.present();
-            std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+            std::thread::sleep(Duration::new(1, 1_000_000_000u32 / 60));
 
 
     }
 
-    pub fn draw(&mut self,x : u8, y : u8, n : u8, buf : [u8; 8]){
+    pub fn draw(&mut self,x : u8, y : u8, n : u8, buf : Vec<u8>){
 
+            self.canvas.set_draw_color(Color::WHITE);
 
-
-        let mut c : usize = 0;
+            let mut c : usize = 0;
 
             while c < (n as usize) {
-                self.canvas.draw_rect(Rect::new(x as i32, (y as usize +c) as i32, 8, buf[c] as u32)).unwrap();
+                self.canvas.fill_rect(Rect::new(x as i32, (y as usize +c) as i32, 8, 1)).unwrap();
                 c+=1;
             }
 
             self.canvas.present();
-            std::thread::sleep(Duration::new(1, 1_000_000_000u32 / 60));
+            std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
 
 
     }

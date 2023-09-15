@@ -11,8 +11,27 @@ use std::{
     u8,
 };
 
+const FONTSET: [u32; 80] = [
+0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+0x20, 0x60, 0x20, 0x20, 0x70, // 1
+0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+0xF0, 0x80, 0xF0, 0x80, 0x80 // F
+];
 
 impl Computer{
+
 
     fn next_operation(&mut self){
         self.cpu.program_counter += 2;
@@ -20,10 +39,10 @@ impl Computer{
     fn executor(&mut self){
         let index = self.cpu.program_counter as usize;
 
-        let first_part : u8 = self.memory.buf[index + 1]  >> 4;
-        let second_part : u8  = (self.memory.buf[index + 1] << 4) >> 4;
-        let third_part : u8 = self.memory.buf[index] >> 4;
-        let fourth_part : u8 = (self.memory.buf[index] << 4) >> 4;
+        let first_part : u8 = self.memory.buf[index]  >> 4;
+        let second_part : u8  = (self.memory.buf[index] << 4) >> 4;
+        let third_part : u8 = self.memory.buf[index+1] >> 4;
+        let fourth_part : u8 = (self.memory.buf[index+1] << 4) >> 4;
 
 
         let n2 = ((0 | third_part) << 4) | fourth_part;
@@ -120,12 +139,14 @@ impl Computer{
             12 => (),
             13 => {
 
-                let p = fourth_part as usize;
-                let mut buf: [u8;8] = [0;8];
-                for k  in buf{
-                    let a = k as usize;
-                    buf[a] = self.memory.buf[(self.cpu.address_reg+a as u16) as usize];
+
+                let mut buf = Vec::new();
+                let mut a = 0;
+                while a < fourth_part {
+                    buf.push(self.memory.buf[(self.cpu.address_reg+a as u16) as usize]);
+                    a += 1;
                 }
+
 
                     self.display.draw(self.cpu.registers[second_part as usize],self.cpu.registers[third_part as usize],fourth_part,buf);
 
@@ -141,7 +162,7 @@ impl Computer{
 
 
 fn main() {
-    let mut f = File::open("test_opcode.ch8").unwrap();
+    let mut f = File::open("ibm.ch8").unwrap();
 
     let mut s = Vec::new();
 
