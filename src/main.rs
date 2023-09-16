@@ -10,8 +10,12 @@ use std::{
     io::{Read},
     u8,
 };
+use std::time::Duration;
+use sdl2::event::Event;
+use sdl2::keyboard::Keycode;
+use sdl2::pixels::Color;
 
-const FONTSET: [u32; 80] = [
+const FONTSET: [u8; 80] = [
 0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
 0x20, 0x60, 0x20, 0x20, 0x70, // 1
 0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
@@ -131,26 +135,14 @@ impl Computer{
                 }
             },
             10 => {
-                self.cpu.address_reg =  &mut n3;
+                self.cpu.address_reg =  n3;
             },
             11 => {
                 self.cpu.program_counter = self.cpu.registers[0] as u16 + n3 ;
             },
             12 => (),
             13 =>  unsafe {
-
-
-                let mut buf = Vec::new();
-                let mut a = 0;
-                while a < fourth_part {
-                    buf.push(((self.cpu.address_reg).as_ref().unwrap() + a as u16) as u8);
-                    a += 1;
-                }
-
-
-                    self.display.draw(self.cpu.registers[second_part as usize] % 64,self.cpu.registers[third_part as usize] % 32,fourth_part,buf,*self.cpu.address_reg);
-
-
+                    self.display.draw(self.cpu.registers[second_part as usize] ,self.cpu.registers[third_part as usize] ,fourth_part,&self.memory.buf,self.cpu.address_reg);
             },
             14 => (),
             15 => (),
@@ -173,7 +165,7 @@ fn main() {
 
     let mut cpu = CPU{
         registers : [0;16],
-        address_reg: &(FONTSET[0] as u16) as *const u16,
+        address_reg: 0,
         program_counter:512,
     };
 
@@ -185,8 +177,24 @@ fn main() {
         buf : Vec::new()
     };
 
-    let mut display = Display::default();
+    let sdl_context = sdl2::init().unwrap();
+    let video_subsystem = sdl_context.video().unwrap();
 
+    let window = video_subsystem.window("rust-sdl2 demo", 64*10, 32*10)
+        .position_centered()
+        .build()
+        .unwrap();
+
+    let mut canvas = window.into_canvas().build().unwrap();
+    canvas.set_draw_color(Color::BLACK);
+    canvas.clear();
+    canvas.present();
+
+
+    let mut display = Display{
+        canvas,
+        screen:[0;2048]
+    };
 
 
     let mut computer =  Computer{
@@ -196,19 +204,55 @@ fn main() {
         display
     };
 
-    let mut i : usize = 0;
-    while i < *len {
-        computer.memory.buf[512+i] = *s.get(i).unwrap();
-        i+=1;
+    let mut t: usize = 0;
+    while t < *len {
+        computer.memory.buf[512 + t] = *s.get(t).unwrap();
+        t += 1;
+    }
+
+    let mut a : usize = 0;
+    while a < FONTSET.len() {
+        computer.memory.buf[a] = *FONTSET.get(a).unwrap();
+        a+=1;
     }
 
 
-    loop {
-        while &computer.cpu.program_counter <= &((4096u16) - 2) {
-            computer.executor();
-            computer.next_operation();
+
+    let mut event_pump = sdl_context.event_pump().unwrap();
+    let mut i = 0;
+
+
+        'running: loop {
+            i = (i + 1) % 255;
+            computer.display.canvas.set_draw_color(Color::WHITE);
+            for event in event_pump.poll_iter() {
+                match event {
+                    Event::Quit { .. } |
+                    Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
+                        break 'running
+                    },
+                    _ => {}
+                }
+            }
+            // The rest of the game loop goes here...
+
+
+
+            if &computer.cpu.program_counter <= &((4096u16) - 2) {
+                computer.executor();
+                computer.next_operation();
+            }
+
+
+            computer.display.canvas.present();
+            ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+
         }
-    }
+
+
+
+
+
 
 
 
