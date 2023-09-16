@@ -91,7 +91,7 @@ impl Computer{
                 self.cpu.registers[second_part as usize] = n2;
             },
             7 => {
-                self.cpu.registers[second_part as usize] += n2;
+                self.cpu.registers[second_part as usize] = self.cpu.registers[second_part as usize].overflowing_add(n2).0 ;
             },
             8 => {
                 match fourth_part {
@@ -108,23 +108,25 @@ impl Computer{
                         self.cpu.registers[second_part as usize] ^= self.cpu.registers[third_part as usize];
                     }
                     4 => {
-                        self.cpu.registers[second_part as usize] += self.cpu.registers[third_part as usize];
+                        self.cpu.registers[second_part as usize] = self.cpu.registers[second_part as usize].overflowing_add(self.cpu.registers[third_part as usize]).0;
                     }
                     5 => {
-                        self.cpu.registers[second_part as usize] -= self.cpu.registers[third_part as usize];
+                        self.cpu.registers[second_part as usize] = self.cpu.registers[second_part as usize].overflowing_sub(self.cpu.registers[third_part as usize]).0;
                     },
                     6 => {
-                        let least_bit = (self.cpu.registers[second_part as usize] << 7) >> 7;
-                        self.cpu.registers[15] = least_bit;
-                        self.cpu.registers[second_part as usize] >>= 1;
+                        self.cpu.registers[second_part as usize] = self.cpu.registers[third_part as usize];
+                        self.cpu.registers[15] = self.cpu.registers[second_part as usize] & 0x01;
+                        self.cpu.registers[second_part as usize] = self.cpu.registers[second_part as usize].overflowing_shr(1).0;
+                        //self.cpu.registers[15] = least_bit;
+
                     }
                     7 => {
                         self.cpu.registers[second_part as usize] = self.cpu.registers[third_part as usize] - self.cpu.registers[second_part as usize];
                     }
-                    8 => {
-                        let most_bit = (self.cpu.registers[second_part as usize] >> 7) ;
-                        self.cpu.registers[15] = most_bit;
-                        self.cpu.registers[second_part as usize] >>= 1;
+                    0xe => {
+                        self.cpu.registers[second_part as usize] = self.cpu.registers[third_part as usize];
+                        self.cpu.registers[15] = self.cpu.registers[second_part as usize] & 0x80;
+                        self.cpu.registers[second_part as usize] = self.cpu.registers[second_part as usize].overflowing_shl(1).0;
                     }
                     _ => {}
                 }
@@ -145,7 +147,40 @@ impl Computer{
                     self.display.draw(self.cpu.registers[second_part as usize] ,self.cpu.registers[third_part as usize] ,fourth_part,&self.memory.buf,self.cpu.address_reg);
             },
             14 => (),
-            15 => (),
+            15 => {
+                if n2 == 0x29 {
+                    match second_part {
+                        0 => self.cpu.address_reg = 0,
+                        1 => self.cpu.address_reg = 5,
+                        2 => self.cpu.address_reg = 10,
+                        3 => self.cpu.address_reg = 15,
+                        4 => self.cpu.address_reg = 20,
+                        5 => self.cpu.address_reg = 25,
+                        6 => self.cpu.address_reg = 30,
+                        7 => self.cpu.address_reg = 35,
+                        8 => self.cpu.address_reg = 40,
+                        9 => self.cpu.address_reg = 45,
+                        10 => self.cpu.address_reg = 50,
+                        11 => self.cpu.address_reg = 55,
+                        12 => self.cpu.address_reg = 60,
+                        13 => self.cpu.address_reg = 65,
+                        14 => self.cpu.address_reg = 70,
+                        15 => self.cpu.address_reg = 75,
+                        _ => (),
+                    }
+                }
+                if n2 == 0x55 {
+                    for i in 0..second_part+1{
+                        self.memory.buf[self.cpu.address_reg as usize + i as usize] = self.cpu.registers[i as usize];
+                    }
+                }
+                if n2 == 0x65 {
+                    for i in 0..second_part+1{
+                        self.cpu.registers[i as usize] = self.memory.buf[self.cpu.address_reg as usize + i as usize];
+                    }
+                }
+
+            },
             _ => println!("error"),
         }
     }
@@ -154,7 +189,7 @@ impl Computer{
 
 
 fn main() {
-    let mut f = File::open("ibm.ch8").unwrap();
+    let mut f = File::open("other_test.ch8").unwrap();
 
     let mut s = Vec::new();
 
