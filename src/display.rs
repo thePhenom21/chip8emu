@@ -24,11 +24,17 @@ impl Display{
 
     }
 
-    pub fn draw(&mut self, x : u8, y : u8, n : u8, ram : &[u8; 4096], reg : u16){
+    pub fn draw(&mut self, x : u8, y : u8, n : u8, ram : &[u8; 4096], reg : u16, mut registers: [u8;16]){
+
+
+        self.canvas.set_draw_color(Color::RGB(0, 0, 0));
+        self.canvas.clear();
 
         self.canvas.set_draw_color(Color::WHITE);
 
+        registers[15] = 0;
 
+        let mut flipped = 0;
         for y_line in 0..n {
 
             let addr = reg + y_line as u16;
@@ -43,12 +49,18 @@ impl Display{
 
                     let idx = x_r + (64 * y_r);
 
+                    flipped |= self.screen[idx];
                     self.screen[idx] ^= 1;
-
 
                 }
             }
 
+        }
+
+        if flipped == 1 {
+            registers[15] = 1;
+        } else {
+            registers[15] = 0;
         }
 
         for (i, pixel) in self.screen.iter().enumerate(){

@@ -9,7 +9,24 @@ pub struct Computer{
 pub struct CPU {
     pub registers: [u8;16],
     pub address_reg: u16,
-    pub program_counter: u16
+    pub program_counter: u16,
+    pub delay_timer : u8,
+    pub sound_timer : u8,
+}
+
+impl CPU {
+    pub fn tick_timers(&mut self) {
+        if self.delay_timer > 0 {
+            self.delay_timer -= 1;
+        }
+
+        if (self.sound_timer > 0) {
+            if self.sound_timer == 1 {
+                println!("beep");
+            }
+            self.sound_timer -= 1;
+        }
+    }
 }
 
 

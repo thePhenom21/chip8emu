@@ -4,6 +4,8 @@ mod display;
 use components::{Memory,CPU,Stack,Computer};
 use display::Display;
 
+use random::{Default, Source};
+
 use std::{
     fmt::LowerHex,
     fs::File,
@@ -13,6 +15,7 @@ use std::{
 use std::time::Duration;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
+use sdl2::libc::rand;
 use sdl2::pixels::Color;
 
 const FONTSET: [u8; 80] = [
@@ -40,7 +43,7 @@ impl Computer{
     fn next_operation(&mut self){
         self.cpu.program_counter += 2;
     }
-    fn executor(&mut self){
+    fn executor(&mut self,keys : &[bool; 16]){
         let index = self.cpu.program_counter as usize;
 
         let first_part : u8 = self.memory.buf[index]  >> 4;
@@ -142,12 +145,36 @@ impl Computer{
             11 => {
                 self.cpu.program_counter = self.cpu.registers[0] as u16 + n3 ;
             },
-            12 => (),
-            13 =>  unsafe {
-                    self.display.draw(self.cpu.registers[second_part as usize] ,self.cpu.registers[third_part as usize] ,fourth_part,&self.memory.buf,self.cpu.address_reg);
+            12 => unsafe {
+                let mut u : u8 = Default::new([2,1]).iter().next().unwrap();
+                u = u & n2;
+                self.cpu.registers[second_part as usize] = u;
             },
-            14 => (),
+            13 =>  unsafe {
+                    self.display.draw(self.cpu.registers[second_part as usize] ,self.cpu.registers[third_part as usize] ,fourth_part,&self.memory.buf,self.cpu.address_reg,self.cpu.registers);
+            },
+            14 => {
+                if n2 == 0x9e{
+                    if keys[self.cpu.registers[second_part as usize] as usize] == true {
+                        self.cpu.program_counter += 2;
+                    }
+                }
+                if n2 == 0xa1{
+                    if keys[self.cpu.registers[second_part as usize] as usize] == false {
+                        self.cpu.program_counter += 2;
+                    }
+                }
+            },
             15 => {
+                if n2 == 0x07{
+                    self.cpu.registers[second_part as usize] = self.cpu.delay_timer
+                }
+                if n2 == 0x15{
+                    self.cpu.delay_timer = self.cpu.registers[second_part as usize];
+                }
+                if n2 == 0x18{
+                    self.cpu.sound_timer = self.cpu.registers[second_part as usize];
+                }
                 if n2 == 0x29 {
                     match second_part {
                         0 => self.cpu.address_reg = 0,
@@ -179,6 +206,25 @@ impl Computer{
                         self.cpu.registers[i as usize] = self.memory.buf[self.cpu.address_reg as usize + i as usize];
                     }
                 }
+                if n2 == 0x33 {
+                    self.memory.buf[self.cpu.address_reg as usize] = self.cpu.registers[second_part as usize] / 100;
+                    self.memory.buf[self.cpu.address_reg as usize + 1 as usize] = (self.cpu.registers[second_part as usize] / 10) % 10 ;
+                    self.memory.buf[self.cpu.address_reg as usize + 2 as usize] = (self.cpu.registers[second_part as usize] % 100) % 10 ;
+                }
+                if n2 == 0x1e {
+                    self.cpu.address_reg = self.cpu.address_reg.overflowing_add(self.cpu.registers[second_part as usize] as u16).0;
+                }
+                if n2 == 0x0a{
+                    if !keys.contains(&true) {
+                        self.cpu.program_counter -= 2;
+                    }else{
+                        for i in 0..15{
+                            if keys.get(i).unwrap() == &true {
+                                self.cpu.registers[second_part as usize] = i as u8;
+                            }
+                        }
+                    }
+                }
 
             },
             _ => println!("error"),
@@ -188,8 +234,10 @@ impl Computer{
 
 
 
+
+
 fn main() {
-    let mut f = File::open("other_test.ch8").unwrap();
+    let mut f = File::open("c8games/PONG2").unwrap();
 
     let mut s = Vec::new();
 
@@ -202,6 +250,8 @@ fn main() {
         registers : [0;16],
         address_reg: 0,
         program_counter:512,
+        delay_timer : 0,
+        sound_timer : 0
     };
 
     let mut memory = Memory{
@@ -215,7 +265,7 @@ fn main() {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 
-    let window = video_subsystem.window("rust-sdl2 demo", 64*10, 32*10)
+    let window = video_subsystem.window("Chip8", 64*10, 32*10)
         .position_centered()
         .build()
         .unwrap();
@@ -256,6 +306,8 @@ fn main() {
     let mut event_pump = sdl_context.event_pump().unwrap();
     let mut i = 0;
 
+    let mut keys : [bool;16] = [false;16];
+
 
         'running: loop {
             i = (i + 1) % 255;
@@ -266,20 +318,124 @@ fn main() {
                     Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
                         break 'running
                     },
+                    Event::KeyDown { keycode: Some(Keycode::Num1), .. } => {
+                        keys[0] = true;
+                    },
+                    Event::KeyDown { keycode: Some(Keycode::Num2), .. } => {
+                        keys[1] = true;
+                    },
+                    Event::KeyDown { keycode: Some(Keycode::Num3), .. } => {
+                        keys[2] = true;
+                    },
+                    Event::KeyDown { keycode: Some(Keycode::Num4), .. } => {
+                        keys[3] = true;
+                    },
+                    Event::KeyDown { keycode: Some(Keycode::Q), .. } => {
+                        keys[4] = true;
+                    },
+                    Event::KeyDown { keycode: Some(Keycode::W), .. } => {
+                        keys[5] = true;
+                    },
+                    Event::KeyDown { keycode: Some(Keycode::E), .. } => {
+                        keys[6] = true;
+                    },
+                    Event::KeyDown { keycode: Some(Keycode::R), .. } => {
+                        keys[7] = true;
+                    },
+                    Event::KeyDown { keycode: Some(Keycode::A), .. } => {
+                        keys[8] = true;
+                    },
+                    Event::KeyDown { keycode: Some(Keycode::S), .. } => {
+                        keys[9] = true;
+                    },
+                    Event::KeyDown { keycode: Some(Keycode::D), .. } => {
+                        keys[10] = true;
+                    },
+                    Event::KeyDown { keycode: Some(Keycode::F), .. } => {
+                        keys[11] = true;
+                    },
+                    Event::KeyDown { keycode: Some(Keycode::Z), .. } => {
+                        keys[12] = true;
+                    },
+                    Event::KeyDown { keycode: Some(Keycode::X), .. } => {
+                        keys[13] = true;
+                    },
+                    Event::KeyDown { keycode: Some(Keycode::C), .. } => {
+                        keys[14] = true;
+                    },
+                    Event::KeyDown { keycode: Some(Keycode::V), .. } => {
+                        keys[15] = true;
+                    }
+                    Event::KeyUp { keycode: Some(Keycode::Num1), .. } => {
+                        keys[0] = false;
+                    },
+                    Event::KeyUp { keycode: Some(Keycode::Num2), .. } => {
+                        keys[1] = false;
+                    },
+                    Event::KeyUp { keycode: Some(Keycode::Num3), .. } => {
+                        keys[2] = false;
+                    },
+                    Event::KeyUp { keycode: Some(Keycode::Num4), .. } => {
+                        keys[3] = false;
+                    },
+                    Event::KeyUp { keycode: Some(Keycode::Q), .. } => {
+                        keys[4] = false;
+                    },
+                    Event::KeyUp { keycode: Some(Keycode::W), .. } => {
+                        keys[5] = false;
+                    },
+                    Event::KeyUp { keycode: Some(Keycode::E), .. } => {
+                        keys[6] = false;
+                    },
+                    Event::KeyUp { keycode: Some(Keycode::R), .. } => {
+                        keys[7] = false;
+                    },
+                    Event::KeyUp { keycode: Some(Keycode::A), .. } => {
+                        keys[8] = false;
+                    },
+                    Event::KeyUp { keycode: Some(Keycode::S), .. } => {
+                        keys[9] = false;
+                    },
+                    Event::KeyUp { keycode: Some(Keycode::D), .. } => {
+                        keys[10] = false;
+                    },
+                    Event::KeyUp { keycode: Some(Keycode::F), .. } => {
+                        keys[11] = false;
+                    },
+                    Event::KeyUp { keycode: Some(Keycode::Z), .. } => {
+                        keys[12] = false;
+                    },
+                    Event::KeyUp { keycode: Some(Keycode::X), .. } => {
+                        keys[13] = false;
+                    },
+                    Event::KeyUp { keycode: Some(Keycode::C), .. } => {
+                        keys[14] = false;
+                    },
+                    Event::KeyUp { keycode: Some(Keycode::V), .. } => {
+                        keys[15] = false;
+                    }
                     _ => {}
                 }
             }
             // The rest of the game loop goes here...
 
-
-
-            if &computer.cpu.program_counter <= &((4096u16) - 2) {
-                computer.executor();
-                computer.next_operation();
+            for y in 0..16{
+                println!("{} {}",y,keys[y])
             }
+
+            for o in 0..10{
+                if &computer.cpu.program_counter <= &((4096u16) - 2) {
+                    computer.executor(&keys);
+                    computer.next_operation();
+                }
+            }
+
+            computer.cpu.tick_timers();
 
 
             computer.display.canvas.present();
+
+
             ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
 
         }
