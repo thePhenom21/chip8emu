@@ -46,7 +46,7 @@ impl Computer{
 
 
         let n2 = ((0 | third_part) << 4) | fourth_part;
-        let n3 =  (0 | second_part as u16) << 8 | (0 | third_part as u16) << 4 | fourth_part as u16;
+        let mut n3 =  (0 | second_part as u16) << 8 | (0 | third_part as u16) << 4 | fourth_part as u16;
 
         let instruction = (0 | first_part as u16) << 12 | (0 | second_part as u16) << 8 | (0 | third_part as u16) << 4 | (0 | fourth_part as u16);
 
@@ -56,12 +56,12 @@ impl Computer{
                     self.display.clear_display();
                 }
                 if instruction == 0x00EE {
-                    self.cpu.program_counter = self.stack.buf.pop().unwrap() - 2;
+                    self.cpu.program_counter = self.stack.buf.pop().unwrap() ;
                 }
             },
 
             1 =>{
-                self.cpu.program_counter = n3 - 2;
+                self.cpu.program_counter = n3 - 2 ;
             },
 
             2 => {
@@ -131,24 +131,24 @@ impl Computer{
                 }
             },
             10 => {
-                self.cpu.address_reg = n3;
+                self.cpu.address_reg =  &mut n3;
             },
             11 => {
-                self.cpu.program_counter = self.cpu.registers[0] as u16 + n3 - 2;
+                self.cpu.program_counter = self.cpu.registers[0] as u16 + n3 ;
             },
             12 => (),
-            13 => {
+            13 =>  unsafe {
 
 
                 let mut buf = Vec::new();
                 let mut a = 0;
                 while a < fourth_part {
-                    buf.push(self.memory.buf[(self.cpu.address_reg+a as u16) as usize]);
+                    buf.push(((self.cpu.address_reg).as_ref().unwrap() + a as u16) as u8);
                     a += 1;
                 }
 
 
-                    self.display.draw(self.cpu.registers[second_part as usize],self.cpu.registers[third_part as usize],fourth_part,buf);
+                    self.display.draw(self.cpu.registers[second_part as usize] % 64,self.cpu.registers[third_part as usize] % 32,fourth_part,buf,*self.cpu.address_reg);
 
 
             },
@@ -173,8 +173,8 @@ fn main() {
 
     let mut cpu = CPU{
         registers : [0;16],
-        address_reg: 0,
-        program_counter:0,
+        address_reg: &(FONTSET[0] as u16) as *const u16,
+        program_counter:512,
     };
 
     let mut memory = Memory{
@@ -198,9 +198,10 @@ fn main() {
 
     let mut i : usize = 0;
     while i < *len {
-        computer.memory.buf[i] = *s.get(i).unwrap();
+        computer.memory.buf[512+i] = *s.get(i).unwrap();
         i+=1;
     }
+
 
     loop {
         while &computer.cpu.program_counter <= &((4096u16) - 2) {

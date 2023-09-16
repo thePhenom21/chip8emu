@@ -8,7 +8,7 @@ pub struct Computer{
 
 pub struct CPU {
     pub registers: [u8;16],
-    pub address_reg: u16,
+    pub address_reg: *const u16,
     pub program_counter: u16
 }
 
