@@ -1,3 +1,4 @@
+use sdl2::audio::AudioSpecDesired;
 use crate::display::Display;
 pub struct Computer{
     pub cpu : CPU,
@@ -16,13 +17,14 @@ pub struct CPU {
 
 impl CPU {
     pub fn tick_timers(&mut self) {
+
         if self.delay_timer > 0 {
             self.delay_timer -= 1;
         }
 
         if (self.sound_timer > 0) {
             if self.sound_timer == 1 {
-                println!("beep");
+
             }
             self.sound_timer -= 1;
         }

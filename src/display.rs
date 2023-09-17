@@ -1,3 +1,4 @@
+use std::time::Duration;
 use sdl2::pixels::Color;
 use sdl2::rect::{Rect};
 use sdl2::render::{WindowCanvas};
@@ -22,13 +23,12 @@ impl Display{
             self.canvas.set_draw_color(Color::BLACK);
             self.canvas.clear();
 
+
     }
 
     pub fn draw(&mut self, x : u8, y : u8, n : u8, ram : &[u8; 4096], reg : u16, mut registers: [u8;16]){
 
-
-        self.canvas.set_draw_color(Color::RGB(0, 0, 0));
-        self.canvas.clear();
+        self.clear_display();
 
         self.canvas.set_draw_color(Color::WHITE);
 
@@ -44,7 +44,7 @@ impl Display{
 
                 if (pixels & (0b1000_0000 >> x_line)) != 0 {
 
-                    let x_r = (x + x_line) as usize % 64;
+                    let x_r = x.overflowing_add(x_line).0 as usize % 64;
                     let y_r = (y + y_line) as usize % 32;
 
                     let idx = x_r + (64 * y_r);
@@ -75,7 +75,7 @@ impl Display{
         }
 
 
-
+        self.canvas.present();
 
 
             //::thread::sleep(Duration::new(1, 1_000_000_000u32 / 60));

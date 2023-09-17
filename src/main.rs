@@ -13,6 +13,7 @@ use std::{
     u8,
 };
 use std::time::Duration;
+use sdl2::audio::{AudioCallback, AudioSpecDesired};
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::libc::rand;
@@ -61,6 +62,8 @@ impl Computer{
             0 => {
                 if instruction == 0x00E0 {
                     self.display.clear_display();
+                    self.display.screen = [0;2048];
+                    self.display.canvas.present();
                 }
                 if instruction == 0x00EE {
                     self.cpu.program_counter = self.stack.buf.pop().unwrap() ;
@@ -124,7 +127,7 @@ impl Computer{
 
                     }
                     7 => {
-                        self.cpu.registers[second_part as usize] = self.cpu.registers[third_part as usize] - self.cpu.registers[second_part as usize];
+                        self.cpu.registers[second_part as usize] = self.cpu.registers[third_part as usize].overflowing_sub(self.cpu.registers[second_part as usize]).0 ;
                     }
                     0xe => {
                         self.cpu.registers[second_part as usize] = self.cpu.registers[third_part as usize];
@@ -234,10 +237,42 @@ impl Computer{
 
 
 
+#[derive(Clone)]
+struct CopiedData {
+    data: Vec<u8>,
+    volume: f32,
+    pos: usize
+}
+
+impl AudioCallback for CopiedData {
+    type Channel = u8;
+
+    fn callback(&mut self, out: &mut [u8]) {
+        for dst in out.iter_mut() {
+            // With channel type u8 the "silence" value is 128 (middle of the 0-2^8 range) so we need
+            // to both fill in the silence and scale the wav data accordingly. Filling the silence
+            // once the wav is finished is trivial, applying the volume is more tricky. We need to:
+            // * Change the range of the values from [0, 255] to [-128, 127] so we can multiply
+            // * Apply the volume by multiplying, this gives us range [-128*volume, 127*volume]
+            // * Move the resulting range to a range centered around the value 128, the final range
+            //   is [128 - 128*volume, 128 + 127*volume] – scaled and correctly positioned
+            //
+            // Using value 0 instead of 128 would result in clicking. Scaling by simply multiplying
+            // would not give correct results.
+            let pre_scale = *self.data.get(self.pos).unwrap_or(&128);
+            let scaled_signed_float = (pre_scale as f32 - 128.0) * self.volume;
+            let scaled = (scaled_signed_float + 128.0) as u8;
+            *dst = scaled;
+            self.pos += 1;
+        }
+    }
+}
+
+
 
 
 fn main() {
-    let mut f = File::open("c8games/PONG2").unwrap();
+    let mut f = File::open("c8games/PONG").unwrap();
 
     let mut s = Vec::new();
 
@@ -308,8 +343,18 @@ fn main() {
 
     let mut keys : [bool;16] = [false;16];
 
+    let wav = sdl2::audio::AudioSpecWAV::load_wav("beep.wav").unwrap();
+    let audio_system = sdl_context.audio().unwrap();
+    let audio_spec = AudioSpecDesired{ freq: None, channels: None, samples: None };
+    let copied_data = CopiedData{ data: wav.buffer().to_vec(), pos: 0, volume: 100.0 };
+    let mut audio_device = audio_system.open_playback(None, &audio_spec, move |spec| {
+        copied_data
+    }).unwrap();
 
-        'running: loop {
+
+
+
+    'running: loop {
             i = (i + 1) % 255;
             computer.display.canvas.set_draw_color(Color::WHITE);
             for event in event_pump.poll_iter() {
@@ -420,23 +465,36 @@ fn main() {
             // The rest of the game loop goes here...
 
             for y in 0..16{
-                println!("{} {}",y,keys[y])
+               // println!("{} {}",y,keys[y])
             }
 
-            for o in 0..10{
+            for i in 0..10{
                 if &computer.cpu.program_counter <= &((4096u16) - 2) {
                     computer.executor(&keys);
                     computer.next_operation();
                 }
             }
 
+
+
+            if computer.cpu.sound_timer == 1 {
+                audio_device.resume();
+                let cb = audio_device.close_and_get_callback();
+                audio_device = audio_system.open_playback(None, &audio_spec, move |spec| {
+                    cb
+                }).unwrap();
+            }
+
+            std::thread::sleep(Duration::from_nanos(10));
             computer.cpu.tick_timers();
 
 
-            computer.display.canvas.present();
 
 
-            ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+
+
+
+            std::thread::sleep(Duration::from_millis(5));
 
         }
 
